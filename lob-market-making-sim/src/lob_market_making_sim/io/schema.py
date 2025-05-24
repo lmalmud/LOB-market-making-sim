@@ -1,6 +1,7 @@
 '''
 schema.py
 Define the schema that will be used as files are imported.
+One canonical container for easier typing & testing.
 
 Dataclass Reference
 https://www.dataquest.io/blog/how-to-use-python-data-classes/#:~:text=In%20Python%2C%20a%20data%20class,a%20program%20or%20a%20system.
@@ -37,6 +38,6 @@ class OrderEvent:
     ts: int # nanoseconds since midnight
     etype: EventType
     oid: int # unique order id
+    size: int # shares after event
+    price: int # price in integer ticks
     direction: Direction
-    px: int # price in integer ticks
-    qty: int # shares after event
