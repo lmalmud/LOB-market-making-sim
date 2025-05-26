@@ -29,6 +29,7 @@ class EventType(Enum):
     EXECUTE_VISIBLE = 4     # Execution of a visible limit order
     EXECUTE_HIDDEN = 5      # Execution of a hidden limit order
     CROSS = 6               # Inditates a cross/auction trade
+    HALT = 7                # Trade halt indicator
     
 @dataclass(slots=True)
 class OrderEvent:
