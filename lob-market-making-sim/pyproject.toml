@@ -1,24 +1,26 @@
-[project]
-name = "lob-market-making-sim"
-version = "0.1.0"
-description = ""
-authors = [
-    {name = "lmalmud",email = "lmalmud2@jh.edu"}
-]
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "numpy",
-    "pyarrow",
-    "pandas",
-    "pytest",
-    "rich"
-]
-
 [tool.poetry]
-packages = [{include = "lob_market_making_sim", from = "src"}]
+name        = "lob-market-making-sim"
+version     = "0.1.0"
+description = ""
+authors     = ["Lucy Malmud <lmalmud2@jh.edu>"]
+readme      = "README.md"
 
+# -------- package path ------------
+[[tool.poetry.packages]]
+include = "lob_market_making_sim"
+from    = "src"
+
+[tool.poetry.dependencies]
+python  = ">=3.11,<3.13"
+pyarrow = "^20.0.0"
+pandas  = "^2.2.3"
+rich    = "^14.0.0"
+numpy   = "^2.2.6"
+ipykernel = "^6.29.5"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires      = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"

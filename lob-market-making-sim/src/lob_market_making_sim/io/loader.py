@@ -1,11 +1,12 @@
 '''
 loader.py
-
+Functionality for parsing a .csv file of event orders into
+an iterable, using the types defined in schema.py
 '''
 
 import pyarrow as pa
 import pyarrow.csv
-import schema
+import lob_market_making_sim.io.schema as schema
 
 def lobster_to_arrow(raw_msg_path):
     '''
