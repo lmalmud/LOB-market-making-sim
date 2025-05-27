@@ -7,6 +7,7 @@ of event orders and tracks relevent trade information.
 from lob_market_making_sim.io.schema import OrderEvent, Direction, EventType
 from typing import Optional, Dict # Allows for gradual typing of basic objects
 from dataclasses import dataclass
+import warnings # For warning messages
 from collections import defaultdict # Container for regular dictionary
 
 @dataclass
@@ -59,63 +60,112 @@ class OrderBookL1:
         # than the best current buy or sell offer
         if ev.etype is EventType.ADD:
 
-            # Add to the list of all orders
-            if ev.oid in self._orders:
-                self._orders[ev.oid].quantity += ev.size # Increase to an existing order
-            else: # An entirely new order is added
-                self._orders[ev.oid] = OrderRec(direction=ev.direction, price=ev.price, quantity=ev.quantity)
+            if ev.oid in self._orders: # If this is adding to an existing order
+                self._orders[ev.oid] += ev.quantity
+            else: # Otherwise, create a new entry
+                self._orders[ev.oid] = OrderRec(direction = ev.direction, price = ev.price, quantity = ev.size)
 
             if ev.direction is Direction.BUY:
 
                 self._bid_depth[ev.price] += ev.size # Add price and size to list of bids
 
-                # Note that if this is the first event, this block will always run
-                # since bid prices are positive
-                if ev.price >= self.best_bid.price:
-                    # If this is an addition to what is already at the top of the book,
-                    # then the new quantity will be updated and stored in bid_depth
-                    self.best_bid = OrderRec(price=ev.price, quantity=self._bid_depth[ev.price])
+                if ev.price == self.best_bid.price:
+                    # If this is an addition to what is already at the top of the book
+                    self.best_bid.quantity += ev.size
+                elif ev.price > self.best_bid.price: # New top of the book
+                    self._refresh_top(ev.direction)
                     
-
             elif ev.direction is Direction.SELL:
-                # Executes if the new price is lower than the best offer to sell, or if no
-                # entry has been made yet
-                if ev.price < self.best_ask_price or self.best_ask_price == 0:
-                    self.best_ask = OrderRec(price = ev.price, quantity = ev.size, direction = Direction.SELL)
-                    self._top_order_oids[ev.oid] = Direction.SELL
-                else:
-                    self._ask_depth[ev.price] = ev.size
+
+                self._ask_depth[ev.price] += ev.size
+
+                if ev.price == self.best_ask.price:
+                    self.best_ask.quantity += ev.size
+                elif ev.price < self.best_ask.price:
+                    self._refresh_top(ev.direction)
 
         # Change the number of shares in one of the orders (partial deletion)
-        # is the same as executing either a visible or hidden trade
-        elif ev.etype is {EventType.CANCEL, EventType.EXECUTE_VISIBLE, EventType.EXECUTE_HIDDEN}:
-            # Only need to change the quantity if the relevant offer is a top one
-            if ev.oid in self._top_order_oids: 
-                pass
+        # is the same as executing either a visible trade
+        elif ev.etype is {EventType.CANCEL, EventType.EXECUTE_VISIBLE}:
+            self._orders[ev.oid].quantity -= ev.size
+
+            # If selling this amount would consume all of the current shares
+            if self._orders[ev.oid].quantity <= 0:
+                del self._orders[ev.oid]
+                if self._orders[ev.oid].quantity < 0:
+                    warnings.warn("Attempt to execute order resulting in negative quantity.")
+
+            # Update the appropriate depth
+            self._update_depth(ev.direction, ev.price, -ev.quantity)
+
+            # Handle the top of the book, if needed
+            if ev.direction is Direction.BUY:                
+                if ev.price >= self.best_bid.price: # Update top of book if relevent
+                    self._best_bid.price -= ev.quantity
+                    if self._best_bid.price <= 0:
+                        self._refresh_top(Direction.BUY)
+
+            elif ev.direction is Direction.SELL:
+                if ev.price <= self._best_ask.price:
+                    self._best_ask.price -= ev.quantity
+                    if self._best_ask.price <= 0:
+                        self._refresh_top(Direction.SELL)
 
         # An order is pulled
         elif ev.etype is EventType.DELETE:
-            if ev.oid in self._top_order_oids:
-                if self._top_order_oids[ev.oid] is Direction.BUY:
-                    self.best_bid = TopLevel()
-                else:
-                    self.best_ask = TopLevel()
-                
-                # No longer track orders that are not present
-                del self._top_order_oids[ev.oid]
+            record = self._orders.pop(ev.oid)
+            # Updating by the -quantity will cause the item to be removed since 0 shares remaining
+            self._update_depth(ev.type, record.price, -record.quantity)
 
-        # Only other event type is a cross trade/auction trade (when a buy and
+        # Other event type is a cross trade/auction trade (when a buy and
         # sell order are executed at the same time), which will not effect
         # the top of the book
 
-    def _promote_next_best(direction: Direction):
+        # A hidden order will also not effect the order book (as it is an
+        # order where size and quantity are concealed)
+
+        # Halt does nothing
+
+    def _refresh_top(self, direction):
         '''
-        If the top of the book order is deleted/fully sold,
-        need to promote the next best one.
+        Sets the top of the book to be the best, which may be
+        triggered by a better price being added or the best
+        price being fully deleted.
         Parameters
-        direction (Direction): side of trade (bid/ask) to be modified
+        direction (Direction): the side of the book to update
         '''
-        pass
+        if direction is Direction.BUY:
+            if self._bid_depth: # Need to ensure there is a next price.
+                next_price = max(self._bid_depth)
+                next_quantity = self._bid_depth[next_price]
+                self.best_bid = TopLevel(price = next_price, quantity = next_quantity)
+
+        elif direction is Direction.SELL:
+            if self._ask_depth:
+                next_price = min(self._ask_depth)
+                next_quantity = self._ask_depth[next_price]
+                self.best_ask = TopLevel(price = next_price, quantity = next_quantity)
+
+    def _update_depth(self, direction : Direction, price, delta):
+        '''
+        Increments the quantity of shares at price of the specified price
+        by delta.
+        Parameters
+        direction (Direction): to indicate whether the update is on buy or sell side
+        price: price of share to be udpated
+        delta: change in quantity
+        Returns
+        int: updated number of shares
+        '''
+        depth = self._bid_dept if direction is Direction.BUY else self._ask_depth
+        depth[price] += delta
+
+        # No longer document shares that have negative quantities
+        if depth[price] <= 0:
+            del depth[price]
+        
+        # Retun the new number of shares for later use
+        return depth[price] - delta
 
     def snapshot(self) -> dict:
         pass
