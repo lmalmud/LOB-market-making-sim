@@ -18,17 +18,8 @@ def lobster_to_arrow(raw_msg_path):
     Raises:
     '''
 
-    # Desired types of input
-    events_schema = {
-        'time' :pa.float64(),
-        'event_type' : pa.int32(),
-        'order_id' : pa.int64(),
-        'size' : pa.int64(),
-        'price' : pa.int64(),
-        'direction' : pa.int64()
-    }
-    convert_options = pa.csv.ConvertOptions(column_types=events_schema) # Enforce types
-    read_options = pa.csv.ReadOptions(column_names=list(events_schema.keys())) # Set appropriate column names
+    convert_options = pa.csv.ConvertOptions(column_types=schema.COL_SCHEMA) # Enforce types
+    read_options = pa.csv.ReadOptions(column_names=list(schema.COLS)) # Set appropriate column names
     return pa.csv.read_csv(raw_msg_path,
                            read_options=read_options,
                            convert_options=convert_options)

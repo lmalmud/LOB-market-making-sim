@@ -11,6 +11,17 @@ https://lobsterdata.com/info/DataStructure.php
 
 from enum import Enum               # Class to associate numbers with keywords
 from dataclasses import dataclass   # Class designed to only hold values
+import pyarrow as pa
+
+COLS = ['time', 'event_type', 'order_id', 'size', 'price', 'direction']
+COL_SCHEMA = events_schema = pa.schema([
+        pa.field('time', pa.float64()),
+        pa.field('event_type', pa.int32()),
+        pa.field('order_id', pa.int64()),
+        pa.field('size', pa.int64()),
+        pa.field('price', pa.int64()),
+        pa.field('direction', pa.int64())
+    ])
 
 class Direction(Enum): 
     '''

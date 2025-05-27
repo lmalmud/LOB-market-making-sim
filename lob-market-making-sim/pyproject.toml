@@ -17,6 +17,7 @@ pandas  = "^2.2.3"
 rich    = "^14.0.0"
 numpy   = "^2.2.6"
 ipykernel = "^6.29.5"
+matplotlib = "^3.10.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
