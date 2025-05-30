@@ -4,7 +4,7 @@ Defines a class to represent a level one order book, allowing for execution
 of event orders and tracks relevent trade information.
 '''
 
-from lob_market_making_sim.io.schema import OrderEvent, Direction, EventType
+from lob_market_making_sim.io.schema import OrderEvent, Direction, EventType, TICK_SIZE
 from typing import Optional, Dict # Allows for gradual typing of basic objects
 from dataclasses import dataclass
 import warnings # For warning messages
@@ -45,7 +45,9 @@ class OrderBookL1:
         self._bid_depth: Dict[int, int] = defaultdict(int)
         self._ask_depth: Dict[int, int] = defaultdict(int)
 
-        # Key is the ID of the each event, necessary for
+        # Key is the ID of the each event, necessary for tracking orders
+        # Note that when an event that refers to an already made order occurs,
+        # the oid will be that of the original order
         self._orders: Dict[int, OrderRec] = {}
 
     def apply(self, ev : OrderEvent):
@@ -56,7 +58,7 @@ class OrderBookL1:
         ev (schema.OrderEvent): the desired event to execute
         '''
 
-        print(f'TYPE {ev.direction} - OID {ev.oid} - PRICE {ev.price}')
+        # print(f'TYPE {ev.direction} - OID {ev.oid} - PRICE {ev.price}')
 
         # If the event is a new offer, update only if this offer best better
         # than the best current buy or sell offer
@@ -73,33 +75,34 @@ class OrderBookL1:
 
                 if ev.price == self.best_bid.price:
                     # If this is an addition to what is already at the top of the book
-                    self.best_bid = TopLevel(price = ev.price, quantity = self.best_bid.quantity - ev.size)
+                    # Top of the book is updated to be consistent with the new number of shares
+                    self.best_bid = TopLevel(price = ev.price, quantity = self._bid_depth[ev.price])
                 elif ev.price > self.best_bid.price: # New top of the book
                     self._refresh_top(ev.direction)
                     
             elif ev.direction is Direction.SELL:
 
                 self._ask_depth[ev.price] += ev.size
-                print(f'the ask depth : {self._ask_depth[ev.price]}')
-                print(f'the best ask: {self.best_ask}')
 
                 if ev.price == self.best_ask.price:
-                    self.best_ask = TopLevel(price = ev.price, quantity = self.best_ask.quantity - ev.size)
+                    self.best_ask = TopLevel(price = ev.price, quantity = self._ask_depth[ev.price])
                 # Need to update the top of the book if it is the first entry as well
                 elif ev.price < self.best_ask.price or self.best_ask.price == 0:
-                    print('should be!!!!!')
                     self._refresh_top(ev.direction)
 
         # Change the number of shares in one of the orders (partial deletion)
         # is the same as executing either a visible trade
         elif ev.etype is EventType.CANCEL or ev.etype is EventType.EXECUTE_VISIBLE:
+            if ev.oid not in self._orders:
+                warnings.warn(f'Unknown order ID {ev.oid} - cannot execute EXECUTE_VISIBLE or CANCEL, skipping execution')
+                return
             self._orders[ev.oid].quantity -= ev.size
 
             # If selling this amount would consume all of the current shares
             if self._orders[ev.oid].quantity <= 0:
-                del self._orders[ev.oid]
                 if self._orders[ev.oid].quantity < 0:
                     warnings.warn("Attempt to execute order resulting in negative quantity.")
+                del self._orders[ev.oid]
 
             # Update the appropriate depth
             self._update_depth(ev.direction, ev.price, -ev.size)
@@ -114,13 +117,18 @@ class OrderBookL1:
 
             elif ev.direction is Direction.SELL:
                 # The price should never be less than best ask, because best ask is always the minimum ask
-                if ev.price == self._best_ask.price:
+                if ev.price == self.best_ask.price:
                     self.best_ask = TopLevel(price = ev.price, quantity = self.best_ask.quantity - ev.size)
                     if self.best_ask.quantity <= 0:
                         self._refresh_top(Direction.SELL)
 
         # An order is pulled
         elif ev.etype is EventType.DELETE:
+
+            if ev.oid not in self._orders:
+                warnings.warn(f'Unknown order ID {ev.oid} - cannot execute DELETE, skipping execution')
+                return
+
             record = self._orders.pop(ev.oid)
             # Updating by the -quantity will cause the item to be removed since 0 shares remaining
             self._update_depth(ev.direction, record.price, -record.quantity)
@@ -136,7 +144,6 @@ class OrderBookL1:
 
         # Halt does nothing
 
-        print()
 
     def _refresh_top(self, direction):
         '''
@@ -202,4 +209,4 @@ class OrderBookL1:
         Returns:
         float: the current midprice
         '''
-        return (self.best_bid_price + self.best_ask_price) / 2
+        return TICK_SIZE * (self.best_bid.price + self.best_ask.price) / 2

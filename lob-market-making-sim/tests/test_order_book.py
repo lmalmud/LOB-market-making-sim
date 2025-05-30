@@ -22,7 +22,7 @@ The sequence checks:
 7.  Hidden EXECUTE leaves the book unchanged.
 """
 from pathlib import Path
-
+from lob_market_making_sim.io.schema import OrderEvent
 import pyarrow as pa
 import pytest
 
@@ -81,3 +81,46 @@ def test_top_of_book_transitions():
     # 7) Hidden EXECUTE does *not* alter the book (idx 7 vs idx 6)
     _, bid_after, ask_after = snaps[7]
     assert bid_after == bid and ask_after == ask
+
+def test_partial_execution_does_not_promote():
+    ob = OrderBookL1()
+
+    ob.apply(OrderEvent(
+        ts=0, etype=EventType.ADD, oid=10, size=80,
+        price=1832500, direction=Direction.SELL
+    ))
+    ob.apply(OrderEvent(
+        ts=1, etype=EventType.EXECUTE_VISIBLE, oid=10, size=30,
+        price=1832500, direction=Direction.SELL
+    ))
+
+    assert ob.best_ask.price == 1832500
+    assert ob.best_ask.quantity == 50
+
+def test_execute_visible_trade_updates_top():
+    '''
+    EXECUTE_VISIBLE should reduce top-level size,
+    and promote next-best if depleted.
+    '''
+    ob = OrderBookL1()
+
+    # Add two buy orders
+    ob.apply(OrderEvent(
+        ts=0, etype=EventType.ADD, oid=1, size=100,
+        price=1832400, direction=Direction.BUY
+    ))
+    ob.apply(OrderEvent(
+        ts=1, etype=EventType.ADD, oid=2, size=50,
+        price=1832200, direction=Direction.BUY
+    ))
+
+    # Execute 100 shares from oid=1 (top level)
+    ob.apply(OrderEvent(
+        ts=2, etype=EventType.EXECUTE_VISIBLE, oid=1, size=100,
+        price=1832400, direction=Direction.BUY
+    ))
+
+    # Check that top of book is now 1832200
+    assert ob.best_bid.price == 1832200
+    assert ob.best_bid.quantity == 50
+

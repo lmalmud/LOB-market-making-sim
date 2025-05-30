@@ -5,6 +5,7 @@ avellaneda.py
 https://medium.com/hummingbot/a-comprehensive-guide-to-avellaneda-stoikovs-market-making-strategy-102d64bf5df6
 '''
 from dataclasses import dataclass
+from lob_market_making_sim.io.schema import TICK_SIZE
 from lob_market_making_sim.models.base import MarketMaker
 import math
 
