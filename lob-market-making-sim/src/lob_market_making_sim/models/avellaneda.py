@@ -17,11 +17,11 @@ class ASParams:
 
 def optimal_spread(q: int, params: ASParams, tau: float) -> float:
     '''
-    Returns half spread \delta(q) given current inventory.
+    Returns spread \delta(q) given current inventory.
     Returns
     float: optimal distance to place each quote away from the reservation price
     '''
-    return (1 / params.gamma) * math.log(1 + params.gamma / params.kappa) + (params.gamma * (params.sigma ** 2) * tau / 2)
+    return (2 / params.gamma) * math.log(1 + params.gamma / params.kappa) + (params.gamma * (params.sigma ** 2) * tau)
 
 def reservation_price(mid: float, q: int, params: ASParams, tau : float) -> float:
     '''
@@ -31,7 +31,7 @@ def reservation_price(mid: float, q: int, params: ASParams, tau : float) -> floa
     q (int): inventory
     params (ASParams): simulation parameters
     '''
-    return mid - (q * params.gamma * (params.sigma **2 )* tau / 2)
+    return mid - (q * params.gamma * (params.sigma **2 )* tau)
 
 class AvellanedaStoikov(MarketMaker):
     '''
@@ -58,7 +58,7 @@ class AvellanedaStoikov(MarketMaker):
         r = reservation_price(mid, inv, self.params, tau)
 
         # final bid, final ask
-        return r - delta, r + delta
+        return r - (delta/2), r + (delta/2)
 
     def reset():
         pass
