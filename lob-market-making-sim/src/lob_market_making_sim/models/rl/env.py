@@ -39,7 +39,7 @@ class LOBMarketMakerEnv(gym.Env):
         self.inventory = 0
         self.cash = 0
         self.order_book = OrderBookL1()
-        self.engine = ReplayEngine()
+        self.engine = ReplayEngine(self.order_book)
 
         # Define action and observation spaces
         # 7x7 discrete gird = 49 actions
@@ -50,7 +50,7 @@ class LOBMarketMakerEnv(gym.Env):
         # Observation = [best_bid, best_ask, agent_bid, agent_ask, inventory, time]
         self.observation_space = spaces.Box(
             low = np.array([0, 0, 0, 0, -inventory_limit, 0]),
-            high = np.array([1e6, 1e6, 1e6, inventory_limit, 1.0]),
+            high = np.array([1e6, 1e6, 1e6, 1e6, inventory_limit, 1.0]),
             dtype = np.float32
         )
 
@@ -117,7 +117,7 @@ class LOBMarketMakerEnv(gym.Env):
         # Log agent quote
         self.engine.log_quote(event.ts, bid_price, ask_price)
         
-        return set._get_obs(), reward, done, False, {}
+        return self._get_obs(), reward, done, False, {}
 
     def _get_obs(self):
         best_bid = self.order_book.best_bid.price
