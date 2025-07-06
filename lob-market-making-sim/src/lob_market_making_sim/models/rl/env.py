@@ -17,6 +17,7 @@ from typing import Iterable
 from lob_market_making_sim.core.engine import ReplayEngine
 from lob_market_making_sim.core.order_book import OrderBookL1
 from lob_market_making_sim.io.schema import OrderEvent
+from lob_market_making_sim.io.schema import TICK_SIZE, EventType, Direction
 
 class LOBMarketMakerEnv(gym.Env):
     '''
@@ -74,13 +75,61 @@ class LOBMarketMakerEnv(gym.Env):
         # Decode action to quote deltas
         bid_offset, ask_offset = self._decode_action(action)
 
-        # Apply next market event
+        # Get midprice and compute bid/ask quotes
+        mid = self.order_book.midprice()
+        bid_price = int(mid / TICK_SIZE) + bid_offset
+        ask_price = int(mid / TICK_SIZE) + ask_offset
+
+        # Get next market event
         event = self.event_sequence[self.t]
-        self.engine.
-        #return obs, reward, done, info
+
+        # Apply market event
+        self.engine.apply_event(event)
+
+        # Simulate agent quote being filled by this event
+        filled_bid = False
+        filled_ask = False
+
+        if event.etype in {EventType.EXECUTE_VISIBLE, EventType.CROSS}:
+            if event.direction is Direction.BUY and event.price >= ask_price:
+                # We sell to incoming market buy because they are willing to buy
+                # for more than what we are offering
+                self.inventory -= event.size
+                self.cash += event.size * ask_price * TICK_SIZE
+                filled_ask = True
+
+            elif event.direction is Direction.SELL and event.price <= bid_price:
+                # We buy from incoming market sell because they are willing to sell
+                # for less than or equal to what we are willing to pay
+                self.inventory += event.size
+                self.cash -= event.size * bid_price * TICK_SIZE
+                filled_bid = True
+            
+        # Reward = mark-to-market PnL - inventory penalty
+        new_mid = self.order_book.midprice()
+        pnl = self.cash + self.inventory * new_mid
+        reward = pnl - self.lambda_ * abs(self.inventory) - self.alpha_  * (self.inventory ** 2)
+
+        # Step forward in time
+        self.t += 1
+        done = self.t >= len(self.event_sequence)
+        
+        # Log agent quote
+        self.engine.log_quote(event.ts, bid_price, ask_price)
+        
+        return set._get_obs(), reward, done, False, {}
 
     def _get_obs(self):
-        pass
+        best_bid = self.order_book.best_bid.price
+        best_ask = self.order_book.best_ask.price
+        mid = self.order_book.midprice()
+
+        return np.array([
+            best_bid,
+            best_ask,
+            self.inventory,
+            self.t / len(self.event_sequence) # normalized time
+        ], dtype=np.float32)
 
     def _decode_action(self, action):
         bid_offset = action // 7 - 3
@@ -88,4 +137,7 @@ class LOBMarketMakerEnv(gym.Env):
         return bid_offset, ask_offset
 
     def simulate_fills(self, event, bid_offset, ask_offset):
-        pass
+        '''
+        Simulate whether agent's bid or ask is filled
+        '''
+        return None, None
