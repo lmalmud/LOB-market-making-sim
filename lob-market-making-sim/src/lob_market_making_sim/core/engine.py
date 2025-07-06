@@ -15,7 +15,20 @@ class ReplayEngine:
         self.midprices = [] # Track every midprice after each event
         self.inv = 0 # inventory, net position in shares
         self.cash = 0 # track P&L
-    
+
+    def reset(self) -> None:
+        '''
+        Clears all replay knowledge by calling the initializer.
+        '''
+        ob = self.ob
+        self.__init__(ob)
+
+    def apply_event(self, event):
+        '''
+        Apply a single order book event (no quoting logic)
+        '''
+        self.ob.apply(event)
+
     def run(self, events):
         '''
         Runs the simulation with the events in events

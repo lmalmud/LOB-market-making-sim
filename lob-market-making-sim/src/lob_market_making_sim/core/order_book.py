@@ -50,6 +50,13 @@ class OrderBookL1:
         # the oid will be that of the original order
         self._orders: Dict[int, OrderRec] = {}
 
+    def reset(self):
+        '''
+        Resets the book by calling initialization again, erasing
+        all stored information.
+        '''
+        self.__init__()
+
     def apply(self, ev : OrderEvent):
         '''
         Update the top top of the book given a single event, as would
