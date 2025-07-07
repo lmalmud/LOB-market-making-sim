@@ -19,21 +19,19 @@ from lob_market_making_sim.core.order_book import OrderBookL1
 from lob_market_making_sim.io.schema import OrderEvent
 from lob_market_making_sim.io.schema import TICK_SIZE, EventType, Direction
 
+NORMALIZED = True
+
 class LOBMarketMakerEnv(gym.Env):
     '''
     Market-Making environment for a day of trading.
     '''
     def __init__(self, event_sequence: Iterable[OrderEvent],
-                 inventory_limit: int = 1000,
-                 lambda_=1e-3,
-                 alpha_=1e-4):
+                 inventory_limit: int = 1000):
 
         super().__init__()
 
         self.event_sequence = event_sequence
         self.inventory_limit = inventory_limit
-        self.lambda_ = lambda_
-        self.alpha_ = alpha_
 
         self.t = 0
         self.inventory = 0
@@ -140,14 +138,26 @@ class LOBMarketMakerEnv(gym.Env):
         agent_bid = getattr(self, "last_bid_price", best_bid)
         agent_ask = getattr(self, "last_ask_price", best_ask)
 
-        return np.array([
-            best_bid,
-            best_ask,
-            agent_bid,
-            agent_ask,
-            self.inventory,
-            self.t / len(self.event_sequence) # normalized time
-        ], dtype=np.float32)
+        if not NORMALIZED:
+            return np.array([
+                best_bid,
+                best_ask,
+                agent_bid,
+                agent_ask,
+                self.inventory / self.inventory_limit, # normalized inventory limit
+                self.t / len(self.event_sequence) # normalized time
+            ], dtype=np.float32)
+        
+        # Since we are trading across multiple tickers, it makes sense to normalize.
+        else:
+            return np.array([
+                (best_bid - mid) / mid,
+                (best_ask - mid) / mid,
+                (agent_bid - mid) / mid,
+                (agent_ask - mid) / mid,
+                self.inventory / self.inventory_limit,
+                self.t / len(self.event_sequence)
+            ], dtype=np.float32)
 
     def _decode_action(self, action):
         bid_offset = action // 7 - 3
