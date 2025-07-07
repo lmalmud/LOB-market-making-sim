@@ -63,6 +63,8 @@ class OrderBookL1:
         be described from the LOBSTER messages.
         Parameters:
         ev (schema.OrderEvent): the desired event to execute
+        Returns:
+        the number of events processed
         '''
 
         # print(f'TYPE {ev.direction} - OID {ev.oid} - PRICE {ev.price}')
@@ -102,7 +104,7 @@ class OrderBookL1:
         elif ev.etype is EventType.CANCEL or ev.etype is EventType.EXECUTE_VISIBLE:
             if ev.oid not in self._orders:
                 warnings.warn(f'Unknown order ID {ev.oid} - cannot execute EXECUTE_VISIBLE or CANCEL, skipping execution')
-                return
+                return 0
             self._orders[ev.oid].quantity -= ev.size
 
             # If selling this amount would consume all of the current shares
@@ -134,7 +136,7 @@ class OrderBookL1:
 
             if ev.oid not in self._orders:
                 warnings.warn(f'Unknown order ID {ev.oid} - cannot execute DELETE, skipping execution')
-                return
+                return 0
 
             record = self._orders.pop(ev.oid)
             # Updating by the -quantity will cause the item to be removed since 0 shares remaining
@@ -150,6 +152,7 @@ class OrderBookL1:
         # order where size and quantity are concealed)
 
         # Halt does nothing
+        return 1
 
 
     def _refresh_top(self, direction):

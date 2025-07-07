@@ -41,6 +41,12 @@ class LOBMarketMakerEnv(gym.Env):
         self.order_book = OrderBookL1()
         self.engine = ReplayEngine(self.order_book)
 
+        # Used when returning observations
+        self.last_bid_price = 0
+        self.last_ask_price = 0
+
+        self.num_events_processed = 0
+
         # Define action and observation spaces
         # 7x7 discrete gird = 49 actions
         # Each action is a pair (bid_offset, ask_offset) \in [-3, 3] \times [-3, 3]
@@ -64,6 +70,7 @@ class LOBMarketMakerEnv(gym.Env):
 
         self.order_book.reset()
         self.engine.reset(self.order_book)
+        self.num_events_processed = 0
 
         # May not need to preload the first event
         self.current_event = self.event_sequence[0]
@@ -80,11 +87,16 @@ class LOBMarketMakerEnv(gym.Env):
         bid_price = int(mid / TICK_SIZE) + bid_offset
         ask_price = int(mid / TICK_SIZE) + ask_offset
 
+        # Save the results of the computation so they can be used
+        # in _get_obs()
+        self.last_bid_price = bid_price
+        self.last_ask_price = ask_price
+
         # Get next market event
         event = self.event_sequence[self.t]
 
         # Apply market event
-        self.engine.apply_event(event)
+        self.num_events_processed += self.engine.apply_event(event)
 
         # Simulate agent quote being filled by this event
         filled_bid = False
@@ -124,9 +136,15 @@ class LOBMarketMakerEnv(gym.Env):
         best_ask = self.order_book.best_ask.price
         mid = self.order_book.midprice()
 
+        # Compute agent's current quotes (use last action or store them as attributes)
+        agent_bid = getattr(self, "last_bid_price", best_bid)
+        agent_ask = getattr(self, "last_ask_price", best_ask)
+
         return np.array([
             best_bid,
             best_ask,
+            agent_bid,
+            agent_ask,
             self.inventory,
             self.t / len(self.event_sequence) # normalized time
         ], dtype=np.float32)

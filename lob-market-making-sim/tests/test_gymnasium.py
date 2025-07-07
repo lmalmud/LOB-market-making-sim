@@ -23,3 +23,10 @@ done = False
 while not done:
     action = env.action_space.sample()
     obs, reward, done, _, _ = env.step(action)
+
+print(f'percentage processed: {env.num_events_processed / len(env.event_sequence)}')
+
+'''
+to do:
+- see why none of the previous stuff is there and it isn't working.
+'''

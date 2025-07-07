@@ -29,8 +29,12 @@ class ReplayEngine:
     def apply_event(self, event):
         '''
         Apply a single order book event (no quoting logic)
+        Parameters:
+        event (OrderEvent): the event to be processed
+        Returns:
+        the number of events processed
         '''
-        self.ob.apply(event)
+        return self.ob.apply(event)
 
     def run(self, events):
         '''
