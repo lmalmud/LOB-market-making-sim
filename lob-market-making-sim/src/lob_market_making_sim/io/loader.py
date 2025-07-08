@@ -7,6 +7,7 @@ an iterable, using the types defined in schema.py
 import pyarrow as pa
 import pyarrow.csv
 import lob_market_making_sim.io.schema as schema
+from lob_market_making_sim.io.schema import TICK_SIZE
 
 def lobster_to_arrow(raw_msg_path):
     '''
@@ -35,6 +36,7 @@ def arrow_to_events(table):
     '''
     events = []
     for row in table.to_pylist():
+        row['price'] = row['price'] * TICK_SIZE # Convert prices to dolalrs
         # Create an OrderEvent for each row
         events.append(schema.OrderEvent(ts=row['time'],
                           etype=schema.EventType(row['event_type'],), # Use the enum EventType

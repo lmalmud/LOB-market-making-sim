@@ -10,7 +10,7 @@ from lob_market_making_sim.models.rl.env import LOBMarketMakerEnv
 from lob_market_making_sim.io.loader import lobster_to_arrow, arrow_to_events
 
 BASE_DIR = Path(__file__).parent.parent.parent.parent.parent
-EVENT_SOURCE = BASE_DIR / "data" / "AAPL_2012-06-21_34200000_57600000_message_1.csv"
+EVENT_SOURCE = BASE_DIR / "data" / "test" / "AAPL_2012-06-21_34200000_57600000_message_1.csv"
 MODEL_DEST = BASE_DIR / "src" / "lob_market_making_sim" / "models" / "rl" / "dqn_lob_market_maker"
 events_arrow = lobster_to_arrow(EVENT_SOURCE)
 events = arrow_to_events(events_arrow)

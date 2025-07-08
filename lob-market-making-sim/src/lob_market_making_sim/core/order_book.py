@@ -4,7 +4,7 @@ Defines a class to represent a level one order book, allowing for execution
 of event orders and tracks relevent trade information.
 '''
 
-from lob_market_making_sim.io.schema import OrderEvent, Direction, EventType, TICK_SIZE
+from lob_market_making_sim.io.schema import OrderEvent, Direction, EventType
 from typing import Optional, Dict # Allows for gradual typing of basic objects
 from dataclasses import dataclass
 import warnings # For warning messages
@@ -34,6 +34,7 @@ class OrderBookL1:
     A level one order book only shows the best bid and ask prices,
     with their aggregate sizes.
     '''
+
     def __init__(self):
         # Note that OrderRec also stores the direction of trade, which is unecessary for
         # the best bid and ask
@@ -49,6 +50,49 @@ class OrderBookL1:
         # Note that when an event that refers to an already made order occurs,
         # the oid will be that of the original order
         self._orders: Dict[int, OrderRec] = {}
+
+        # Negative oid is reserved for our own quotes
+        self._next_agent_oid = -1
+
+    def place_agent_quote(self, direction: Direction, price: float, size: int = 1) -> int:
+        '''
+        Insert (or replace) the agent quote at price. Returns the oid.
+        Parameters:
+        direction (Direction): whether the quote is buy or sell
+        price (float): desired price to buy/sell at
+        size (int): number of shares requested
+        Returns:
+        int: oid
+        '''
+        oid = self._next_agent_oid
+        self._next_agent_oid -= 1
+        ev = OrderEvent(
+            ts = 0.0, # not relevant for matching
+            etype = EventType.ADD,
+            oid = oid,
+            direction = direction,
+            price = price,
+            size = size
+        )
+        self.apply(ev)
+        return oid
+    
+    def cancel_agent_quote(self, oid: int) -> None:
+        '''
+        Delete's the agent's outstanding quote (if any)
+        '''
+
+        if oid in self._orders:
+            rec = self._orders # record desired to delete
+            ev = OrderEvent(
+                ts = 0.0,
+                etype = EventType.DELETE,
+                oid = oid,
+                direction = rec.direction,
+                price = rec.price,
+                size = rec.quantity
+            )
+            self.apply(ev)
 
     def reset(self):
         '''
@@ -217,6 +261,6 @@ class OrderBookL1:
         Parameters:
         None
         Returns:
-        float: the current midprice
+        float: the current midprice in dollars
         '''
-        return TICK_SIZE * (self.best_bid.price + self.best_ask.price) / 2
+        return (self.best_bid.price + self.best_ask.price) / 2

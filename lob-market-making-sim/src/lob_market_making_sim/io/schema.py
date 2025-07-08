@@ -13,7 +13,7 @@ from enum import Enum               # Class to associate numbers with keywords
 from dataclasses import dataclass   # Class designed to only hold values
 import pyarrow as pa
 
-TICK_SIZE = 10e-4
+TICK_SIZE = 1e-4
 
 COLS = ['time', 'event_type', 'order_id', 'size', 'price', 'direction']
 COL_SCHEMA = events_schema = pa.schema([

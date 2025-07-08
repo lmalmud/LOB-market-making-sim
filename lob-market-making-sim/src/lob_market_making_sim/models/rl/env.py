@@ -17,7 +17,7 @@ from typing import Iterable
 from lob_market_making_sim.core.engine import ReplayEngine
 from lob_market_making_sim.core.order_book import OrderBookL1
 from lob_market_making_sim.io.schema import OrderEvent
-from lob_market_making_sim.io.schema import TICK_SIZE, EventType, Direction
+from lob_market_making_sim.io.schema import EventType, Direction
 
 NORMALIZED = True
 
@@ -26,9 +26,13 @@ class LOBMarketMakerEnv(gym.Env):
     Market-Making environment for a day of trading.
     '''
     def __init__(self, event_sequence: Iterable[OrderEvent],
-                 inventory_limit: int = 1000):
+                 inventory_limit: int = 1000,
+                 lambda_ = 1e-3, alpha_ = 1e-4):
 
         super().__init__()
+
+        self.lambda_ = lambda_
+        self.alpha_ = alpha_
 
         self.event_sequence = event_sequence
         self.inventory_limit = inventory_limit
@@ -44,6 +48,8 @@ class LOBMarketMakerEnv(gym.Env):
         self.last_ask_price = 0
 
         self.num_events_processed = 0
+        self.num_bids_filled = 0
+        self.num_asks_filled = 0
 
         # Define action and observation spaces
         # 7x7 discrete gird = 49 actions
@@ -68,7 +74,11 @@ class LOBMarketMakerEnv(gym.Env):
 
         self.order_book.reset()
         self.engine.reset(self.order_book)
+
+        # Reset metrics
         self.num_events_processed = 0
+        self.num_bids_filled = 0
+        self.num_asks_filled = 0
 
         # May not need to preload the first event
         self.current_event = self.event_sequence[0]
@@ -82,8 +92,8 @@ class LOBMarketMakerEnv(gym.Env):
 
         # Get midprice and compute bid/ask quotes
         mid = self.order_book.midprice()
-        bid_price = int(mid / TICK_SIZE) + bid_offset
-        ask_price = int(mid / TICK_SIZE) + ask_offset
+        bid_price = mid + bid_offset
+        ask_price = mid + ask_offset
 
         # Save the results of the computation so they can be used
         # in _get_obs()
@@ -93,39 +103,26 @@ class LOBMarketMakerEnv(gym.Env):
         # Get next market event
         event = self.event_sequence[self.t]
 
+        self.engine._update_quotes(bid_price, ask_price, event.ts)
+        
+        # Update metrics about number of quotes filled
+        num_processed, buy_fill, sell_fill = self.engine.apply_event(event)
+        self.num_asks_filled += 1 if buy_fill > 0 else 0
+        self.num_bids_filled += 1 if sell_fill > 0 else 0
+
         # Apply market event
-        self.num_events_processed += self.engine.apply_event(event)
-
-        # Simulate agent quote being filled by this event
-        filled_bid = False
-        filled_ask = False
-
-        if event.etype in {EventType.EXECUTE_VISIBLE, EventType.CROSS}:
-            if event.direction is Direction.BUY and event.price >= ask_price:
-                # We sell to incoming market buy because they are willing to buy
-                # for more than what we are offering
-                self.inventory -= event.size
-                self.cash += event.size * ask_price * TICK_SIZE
-                filled_ask = True
-
-            elif event.direction is Direction.SELL and event.price <= bid_price:
-                # We buy from incoming market sell because they are willing to sell
-                # for less than or equal to what we are willing to pay
-                self.inventory += event.size
-                self.cash -= event.size * bid_price * TICK_SIZE
-                filled_bid = True
+        self.num_events_processed += num_processed
             
         # Reward = mark-to-market PnL - inventory penalty
         new_mid = self.order_book.midprice()
-        pnl = self.cash + self.inventory * new_mid
-        reward = pnl - self.lambda_ * abs(self.inventory) - self.alpha_  * (self.inventory ** 2)
+        pnl = self.engine.cash + self.engine.inventory * new_mid
+        reward = pnl - self.lambda_ * abs(self.engine.inventory) - self.alpha_  * (self.engine.inventory ** 2)
 
         # Step forward in time
         self.t += 1
         done = self.t >= len(self.event_sequence)
         
         # Log agent quote
-        self.engine.log_quote(event.ts, bid_price, ask_price)
         
         return self._get_obs(), reward, done, False, {}
 
@@ -151,10 +148,10 @@ class LOBMarketMakerEnv(gym.Env):
         # Since we are trading across multiple tickers, it makes sense to normalize.
         else:
             return np.array([
-                (best_bid - mid) / mid,
-                (best_ask - mid) / mid,
-                (agent_bid - mid) / mid,
-                (agent_ask - mid) / mid,
+                0 if mid == 0 else (best_bid - mid) / mid,
+                0 if mid == 0 else (best_ask - mid) / mid,
+                0 if mid == 0 else (agent_bid - mid) / mid,
+                0 if mid == 0 else (agent_ask - mid) / mid,
                 self.inventory / self.inventory_limit,
                 self.t / len(self.event_sequence)
             ], dtype=np.float32)

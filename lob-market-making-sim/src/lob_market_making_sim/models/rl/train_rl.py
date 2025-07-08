@@ -19,7 +19,6 @@ from lob_market_making_sim.models.rl.env import LOBMarketMakerEnv
 from lob_market_making_sim.io.loader import lobster_to_arrow, arrow_to_events
 
 BASE_DIR = Path(__file__).parent.parent.parent.parent.parent
-print(BASE_DIR)
 DATA_DIR = BASE_DIR / "data"
 MODEL_DEST = BASE_DIR / "src" / "lob_market_making_sim" / "models" / "rl" / "dqn_lob_market_maker"
 

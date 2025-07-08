@@ -3,9 +3,14 @@ avellaneda.py
 
 
 https://medium.com/hummingbot/a-comprehensive-guide-to-avellaneda-stoikovs-market-making-strategy-102d64bf5df6
+
+Unit sanity check:
+σ in Avellaneda–Stoikov should be the mid-price σ in $ per √second.
+
+If you estimated volatility in ticks per √second and then converted prices
+to dollars, multiply by TICK_SIZE once when you create the ASParams.
 '''
 from dataclasses import dataclass
-from lob_market_making_sim.io.schema import TICK_SIZE
 from lob_market_making_sim.models.base import MarketMaker
 import math
 
@@ -48,11 +53,11 @@ class AvellanedaStoikov(MarketMaker):
         '''
         Retuns the quoted bid and ask price, as calculated by paper formulas.
         Parameters
-        mid (float): current midprice
+        mid (float): current midprice, in dollars
         inv (int): number of shares
         t (float): current time
         Returns
-        tuple[float, float]: final bid, final ask
+        tuple[float, float]: final bid, final ask in dollars
         '''
         tau = max(self._T - t, 0)
         delta = optimal_spread(inv, self.params, tau)
