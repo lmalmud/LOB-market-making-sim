@@ -20,6 +20,8 @@ The sequence checks:
 5.  New ask at higher price becomes best-ask.
 6.  DELETE on best-bid promotes next-highest bid price.
 7.  Hidden EXECUTE leaves the book unchanged.
+
+To run: poetry run pytest tests/test_order_book.py
 """
 from pathlib import Path
 from lob_market_making_sim.io.schema import OrderEvent
@@ -55,12 +57,12 @@ def test_top_of_book_transitions():
 
     # 1) After first two ADDs, top of book is 183.24/183.30 (sizes 100/120)
     ev, bid, ask = snaps[1]
-    assert bid.price == 1832400 and bid.quantity == 100
-    assert ask.price == 1833000 and ask.quantity == 120
+    assert bid.price == 183.24 and bid.quantity == 100
+    assert ask.price == 183.30 and ask.quantity == 120
 
     # 2) After adding lower-priced bid (event idx 1), best-bid unchanged
     _, bid, _ = snaps[2]
-    assert bid.price == 1832400
+    assert bid.price == 183.24
 
     # 3) After partial CANCEL (idx 2), size shrinks from 100 -> 70
     _, bid, _ = snaps[3]
@@ -72,11 +74,11 @@ def test_top_of_book_transitions():
 
     # 5) New ask @ 183.32 becomes best-ask (idx 5)
     _, _, ask = snaps[5]
-    assert (ask.price, ask.quantity) == (1833200, 90)
+    assert (round(ask.price, 2), ask.quantity) == (183.32, 90)
 
     # 6) DELETE best-bid (idx 6) promotes 183.22 bid (size 50)
     _, bid, _ = snaps[6]
-    assert (bid.price, bid.quantity) == (1832200, 50)
+    assert (bid.price, bid.quantity) == (183.22, 50)
 
     # 7) Hidden EXECUTE does *not* alter the book (idx 7 vs idx 6)
     _, bid_after, ask_after = snaps[7]
@@ -87,14 +89,14 @@ def test_partial_execution_does_not_promote():
 
     ob.apply(OrderEvent(
         ts=0, etype=EventType.ADD, oid=10, size=80,
-        price=1832500, direction=Direction.SELL
+        price=183.25, direction=Direction.SELL
     ))
     ob.apply(OrderEvent(
         ts=1, etype=EventType.EXECUTE_VISIBLE, oid=10, size=30,
-        price=1832500, direction=Direction.SELL
+        price=183.25, direction=Direction.SELL
     ))
 
-    assert ob.best_ask.price == 1832500
+    assert ob.best_ask.price == 183.25
     assert ob.best_ask.quantity == 50
 
 def test_execute_visible_trade_updates_top():
@@ -107,20 +109,20 @@ def test_execute_visible_trade_updates_top():
     # Add two buy orders
     ob.apply(OrderEvent(
         ts=0, etype=EventType.ADD, oid=1, size=100,
-        price=1832400, direction=Direction.BUY
+        price=183.24, direction=Direction.BUY
     ))
     ob.apply(OrderEvent(
         ts=1, etype=EventType.ADD, oid=2, size=50,
-        price=1832200, direction=Direction.BUY
+        price=183.22, direction=Direction.BUY
     ))
 
     # Execute 100 shares from oid=1 (top level)
     ob.apply(OrderEvent(
         ts=2, etype=EventType.EXECUTE_VISIBLE, oid=1, size=100,
-        price=1832400, direction=Direction.BUY
+        price=183.24, direction=Direction.BUY
     ))
 
     # Check that top of book is now 1832200
-    assert ob.best_bid.price == 1832200
+    assert ob.best_bid.price == 183.22
     assert ob.best_bid.quantity == 50
 

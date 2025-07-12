@@ -16,9 +16,12 @@ class ReplayEngine:
         self.inv = 0 # inventory, net position in shares
         self.cash = 0 # track P&L
 
-        # the IDs of orders placed by the agent
+        # the IDs of orders placed by the agent 
         self.bid_oid = None
         self.ask_oid = None
+
+        # number of events were able to execute
+        self.num_events_executed = 0
 
         # Default quote size for agent order- can later update
         self.QUOTE_SIZE = 10
@@ -65,11 +68,14 @@ class ReplayEngine:
 
         # if the event is a trade, see if one of the agent oids were hit
         if event.etype in {EventType.EXECUTE_VISIBLE, EventType.CROSS}:
+            # Market BUY hits our ask
             if event.oid == self.ask_oid and event.direction is Direction.BUY:
                 filled_sell = event.size
                 self.cash += filled_sell * event.price
                 self.inv -= filled_sell
                 self.ask_oid = None # was removed in apply()
+
+            # Market SELL hits our bid
             elif event.oid == self.bid_oid and event.direction is Direction.SELL:
                 filled_buy = event.size
                 self.cash -= filled_buy * event.price
@@ -92,34 +98,27 @@ class ReplayEngine:
         T = 6.5*60*60
         for event in events:
             # convert event.ts in nanoseconds to seconds
-            tau = max(T - event.ts * 1e-9, 0) # ending timestep - closing time = time till closing
+            tau = max(T - event.ts * 1e-9, 0) # ending timestep - closing time = time till closing (s)
 
+            # Apply the current market event
             self.ob.apply(event)
  
+            # Gets the bid and ask from the strategy that is being implemented
             bid, ask = self.strategy.quote(self.ob.midprice(),
                                             self.inv,
                                             tau)
             
-                # Decide if the current event will fill one of the quotes
-                # The only two allowable events that would cause a transaction are
-                # visible orders and cross trades (since they will include executing a buy
-                # and sell order)
-                if event.etype in {EventType.EXECUTE_VISIBLE, EventType.CROSS}:
+            # cancel old order, place new
+            self._update_quotes(bid, ask, ts=event.ts)
 
-                    if event.direction is Direction.BUY and event.price >= ask:
-                        # We sell because someone is willing to buy for the same or more
-                        self.inv -= event.size
-                        self.cash += event.size * ask
+            # apply market event placed by the agent and capture filles
+            # FIXME: the event that is being applied here is not correct- it needs
+            # to be the event that is placed by the strategy
+            num_events, buy_fill, sell_fill = self.apply_event(event)
+            self.num_events_executed += num_events
 
-                    elif event.direction is Direction.SELL and event.price <= bid:
-                        # We buy because someone is willing to sell for the same or less
-                        self.inv += event.size
-                        self.cash -= event.size * bid
-
-                # Note that this is an approximation: we are assuming that the quote sits
-                # at the front and is filled entirely if the incoming event has a trade through that price
-
-                self.log_quote(event.ts, bid, ask)
+            # store the midprice
+            self.midprices.append(self.ob.midprice())
 
 
     def log_quote(self, timestamp, bid_price, ask_price):

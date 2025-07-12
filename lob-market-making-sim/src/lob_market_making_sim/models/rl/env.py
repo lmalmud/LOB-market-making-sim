@@ -47,7 +47,6 @@ class LOBMarketMakerEnv(gym.Env):
         self.last_bid_price = 0
         self.last_ask_price = 0
 
-        self.num_events_processed = 0
         self.num_bids_filled = 0
         self.num_asks_filled = 0
 
@@ -106,12 +105,9 @@ class LOBMarketMakerEnv(gym.Env):
         self.engine._update_quotes(bid_price, ask_price, event.ts)
         
         # Update metrics about number of quotes filled
-        num_processed, buy_fill, sell_fill = self.engine.apply_event(event)
+        _, buy_fill, sell_fill = self.engine.apply_event(event)
         self.num_asks_filled += 1 if buy_fill > 0 else 0
         self.num_bids_filled += 1 if sell_fill > 0 else 0
-
-        # Apply market event
-        self.num_events_processed += num_processed
             
         # Reward = mark-to-market PnL - inventory penalty
         new_mid = self.order_book.midprice()

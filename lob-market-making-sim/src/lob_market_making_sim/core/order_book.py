@@ -83,7 +83,7 @@ class OrderBookL1:
         '''
 
         if oid in self._orders:
-            rec = self._orders # record desired to delete
+            rec = self._orders[oid] # record desired to delete
             ev = OrderEvent(
                 ts = 0.0,
                 etype = EventType.DELETE,
@@ -118,7 +118,7 @@ class OrderBookL1:
         if ev.etype is EventType.ADD:
 
             if ev.oid in self._orders: # If this is adding to an existing order
-                self._orders[ev.oid] += ev.quantity
+                self._orders[ev.oid].quantity += ev.size
             else: # Otherwise, create a new entry
                 self._orders[ev.oid] = OrderRec(direction = ev.direction, price = ev.price, quantity = ev.size)
 

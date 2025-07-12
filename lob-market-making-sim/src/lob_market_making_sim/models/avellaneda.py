@@ -10,6 +10,7 @@ Unit sanity check:
 If you estimated volatility in ticks per √second and then converted prices
 to dollars, multiply by TICK_SIZE once when you create the ASParams.
 '''
+
 from dataclasses import dataclass
 from lob_market_making_sim.models.base import MarketMaker
 import math
