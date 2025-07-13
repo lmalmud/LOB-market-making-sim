@@ -38,17 +38,12 @@ class LOBMarketMakerEnv(gym.Env):
         self.inventory_limit = inventory_limit
 
         self.t = 0
-        self.inventory = 0
-        self.cash = 0
         self.order_book = OrderBookL1()
         self.engine = ReplayEngine(self.order_book)
 
         # Used when returning observations
         self.last_bid_price = 0
         self.last_ask_price = 0
-
-        self.num_bids_filled = 0
-        self.num_asks_filled = 0
 
         # Define action and observation spaces
         # 7x7 discrete gird = 49 actions
@@ -68,16 +63,9 @@ class LOBMarketMakerEnv(gym.Env):
 
         # Reset internal markers
         self.t = 0 # Index for each event
-        self.inventory = 0
-        self.cash = 0
 
         self.order_book.reset()
         self.engine.reset(self.order_book)
-
-        # Reset metrics
-        self.num_events_processed = 0
-        self.num_bids_filled = 0
-        self.num_asks_filled = 0
 
         # May not need to preload the first event
         self.current_event = self.event_sequence[0]
@@ -86,40 +74,40 @@ class LOBMarketMakerEnv(gym.Env):
         return self._get_obs(), {}
     
     def step(self, action):
-        # Decode action to quote deltas
-        bid_offset, ask_offset = self._decode_action(action)
+        # 0: Decode action to quote deltas
+        bid_tick, ask_tick = self._decode_action(action) # returns integer *ticks*
 
-        # Get midprice and compute bid/ask quotes
-        mid = self.order_book.midprice()
-        bid_price = mid + bid_offset
-        ask_price = mid + ask_offset
-
-        # Save the results of the computation so they can be used
-        # in _get_obs()
-        self.last_bid_price = bid_price
-        self.last_ask_price = ask_price
-
-        # Get next market event
+        # 1: process current market event
         event = self.event_sequence[self.t]
+        self.engine.apply_event(event)
 
-        self.engine._update_quotes(bid_price, ask_price, event.ts)
+        # 2. compute clean mid AFTER tape event
+        clean_mid = self.order_book.mid_external()
+        if clean_mid is None:
+            # skip quoting this step
+            self.t += 1
+            return self._get_obs(), 0.0, self.t >= len(self.event_sequence), False, {}
+        bid_px = clean_mid + bid_tick * 0.01                # convert ticks → $
+        ask_px = clean_mid + ask_tick * 0.01
+        if self.engine.inv >= self.inventory_limit:
+            bid_px = None
+        if self.engine.inv <= -self.inventory_limit:
+            ask_px = None
         
-        # Update metrics about number of quotes filled
-        _, buy_fill, sell_fill = self.engine.apply_event(event)
-        self.num_asks_filled += 1 if buy_fill > 0 else 0
-        self.num_bids_filled += 1 if sell_fill > 0 else 0
-            
-        # Reward = mark-to-market PnL - inventory penalty
-        new_mid = self.order_book.midprice()
-        pnl = self.engine.cash + self.engine.inv * new_mid
-        reward = pnl - self.lambda_ * abs(self.engine.inv) - self.alpha_  * (self.engine.inv ** 2)
+        # 3. post / cancel our quotes
+        self.engine._update_quotes(bid_px, ask_px, event.ts)
 
-        # Step forward in time
+        # 4. reward (use engine states)
+        pnl = self.engine.cash + self.engine.inv * clean_mid
+        reward = pnl - self.lambda_ * abs(self.engine.inv) - self.alpha_ * self.engine.inv**2
+
+        # 5: Step forward in time
         self.t += 1
         done = self.t >= len(self.event_sequence)
-        
-        # Log agent quote
-        
+
+        # inventory liquidation - so agent learns to finish flat
+        if done:
+            reward -= abs(self.engine.inv) * 0.02     # cost to unwind
         return self._get_obs(), reward, done, False, {}
 
     def _get_obs(self):
@@ -137,7 +125,7 @@ class LOBMarketMakerEnv(gym.Env):
                 best_ask,
                 agent_bid,
                 agent_ask,
-                self.inventory / self.inventory_limit, # normalized inventory limit
+                self.engine.inv / self.inventory_limit, # normalized inventory limit
                 self.t / len(self.event_sequence) # normalized time
             ], dtype=np.float32)
         
@@ -148,7 +136,7 @@ class LOBMarketMakerEnv(gym.Env):
                 0 if mid == 0 else (best_ask - mid) / mid,
                 0 if mid == 0 else (agent_bid - mid) / mid,
                 0 if mid == 0 else (agent_ask - mid) / mid,
-                self.inventory / self.inventory_limit,
+                self.engine.inv / self.inventory_limit,
                 self.t / len(self.event_sequence)
             ], dtype=np.float32)
 
