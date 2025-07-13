@@ -25,4 +25,6 @@ while not done:
     obs, reward, done, _, _ = env.step(action)
 
 print("cash:")
-print(env.cash)
+print(env.engine.cash)
+print("inventory:")
+print(env.engine.inv)

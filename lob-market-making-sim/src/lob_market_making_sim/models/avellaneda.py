@@ -64,8 +64,15 @@ class AvellanedaStoikov(MarketMaker):
         delta = optimal_spread(inv, self.params, tau)
         r = reservation_price(mid, inv, self.params, tau)
 
-        # final bid, final ask
-        return r - (delta/2), r + (delta/2)
+        bid_px = r - delta/2
+        ask_px = r + delta/2
+
+        # inventory hard guard
+        if inv >= self.params.qmax:        # LONG -> stop bidding
+            bid_px = None
+        if inv <= -self.params.qmax:        # SHORT -> stop offering
+            ask_px = None
+        return bid_px, ask_px
 
     def reset():
         pass

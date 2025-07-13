@@ -255,6 +255,35 @@ class OrderBookL1:
             mid  = self.midprice()
         )
 
+    def mid_external(self) -> float | None:
+        # ---- find best external bid -----------------------------------
+        bid_price = None
+        for price in sorted(self._bid_depth, reverse=True):
+            ext_qty = self._bid_depth[price] - sum(
+                rec.quantity for oid, rec in self._orders.items()
+                if oid < 0 and rec.direction is Direction.BUY and rec.price == price
+            )
+            if ext_qty > 0:
+                bid_price = price
+                break
+
+        # ---- find best external ask -----------------------------------
+        ask_price = None
+        for price in sorted(self._ask_depth):
+            ext_qty = self._ask_depth[price] - sum(
+                rec.quantity for oid, rec in self._orders.items()
+                if oid < 0 and rec.direction is Direction.SELL and rec.price == price
+            )
+            if ext_qty > 0:
+                ask_price = price
+                break
+
+        # ---- if either side missing, return previous mid, else average
+        if bid_price is None or ask_price is None or bid_price >= ask_price:
+            return None
+        return (bid_price + ask_price) / 2
+
+
     def midprice(self) -> float:
         '''
         Returns the midprice (the average of the best bid and ask prices).

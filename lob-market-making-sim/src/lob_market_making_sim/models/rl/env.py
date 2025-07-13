@@ -111,8 +111,8 @@ class LOBMarketMakerEnv(gym.Env):
             
         # Reward = mark-to-market PnL - inventory penalty
         new_mid = self.order_book.midprice()
-        pnl = self.engine.cash + self.engine.inventory * new_mid
-        reward = pnl - self.lambda_ * abs(self.engine.inventory) - self.alpha_  * (self.engine.inventory ** 2)
+        pnl = self.engine.cash + self.engine.inv * new_mid
+        reward = pnl - self.lambda_ * abs(self.engine.inv) - self.alpha_  * (self.engine.inv ** 2)
 
         # Step forward in time
         self.t += 1
